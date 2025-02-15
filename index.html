@@ -13,10 +13,11 @@
     </style>
   </head>
   <body>
-    <h1>Get Red Texts from Excel sheet</h1>
+    <h1>Get Colored Texts from Excel sheet</h1>
 
     <div>Steps:</div>
     <ol>
+      <li>Select the color you want to find</li>
       <li>Select all and copy the Excel sheet</li>
       <li>Click the button below</li>
       <li>Get red texts in the textarea below</li>
@@ -25,46 +26,85 @@
       <button type="button" id="copy-button">I've copied the sheet.</button>
     </div>
     <div id="html-insert" style="height: 0px; overflow: hidden"></div>
+    <div id="target-color-input">
+      <label for="target-color">Target Color:</label>
+      <input type="color" id="target-color" value="#ff0000" />
+    </div>
 
     <div>Result:</div>
-    <textarea id="output" readonly style="height: 200px; color: red"></textarea>
+    <textarea id="output" readonly style="height: 200px"></textarea>
 
     <script>
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        if (!result) {
+          throw new Error(`Invalid color: ${hex}`);
+        }
+        const r = parseInt(result[1], 16);
+        const g = parseInt(result[2], 16);
+        const b = parseInt(result[3], 16);
+        return { r, g, b };
+      };
+
+      const parseRgb = (rgb) => {
+        const result = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb);
+        if (!result) {
+          throw new Error(`Invalid color: ${rgb}`);
+        }
+        return {
+          r: parseInt(result[1]),
+          g: parseInt(result[2]),
+          b: parseInt(result[3]),
+        };
+      };
+
       const output = document.getElementById("output");
       output.value = "Hello World";
 
       const inputTextarea = document.getElementById("input");
       const htmlInsert = document.getElementById("html-insert");
-
       const copyButton = document.getElementById("copy-button");
       copyButton.addEventListener("click", async () => {
-        const clipboardItems = await navigator.clipboard.read();
-        console.log(clipboardItems);
-        const textHtmlInClipboard = clipboardItems.find((item) => {
-          return item.types.includes("text/html");
-        });
+        try {
+          const targetColor = document.getElementById("target-color").value;
 
-        if (!textHtmlInClipboard) {
-          alert("No HTML in clipboard");
-          return;
-        }
+          const clipboardItems = await navigator.clipboard.read();
+          console.log(clipboardItems);
+          const textHtmlInClipboard = clipboardItems.find((item) => {
+            return item.types.includes("text/html");
+          });
 
-        const textHtmlBlob = await textHtmlInClipboard.getType("text/html");
-        const textHtml = await textHtmlBlob.text();
-
-        htmlInsert.innerHTML = textHtml;
-
-        // find all red texts in the html, use getComputedStyle to get the color
-        const allTexts = htmlInsert.querySelectorAll("*");
-        const redTexts = [];
-        allTexts.forEach((text) => {
-          const color = getComputedStyle(text).color;
-          if (color === "rgb(255, 0, 0)") {
-            redTexts.push(text.textContent);
+          if (!textHtmlInClipboard) {
+            alert("No HTML in clipboard");
+            return;
           }
-        });
 
-        output.value = redTexts.join("\n");
+          const textHtmlBlob = await textHtmlInClipboard.getType("text/html");
+          const textHtml = await textHtmlBlob.text();
+
+          htmlInsert.innerHTML = textHtml;
+
+          // find all red texts in the html, use getComputedStyle to get the color
+          const allTexts = htmlInsert.querySelectorAll("*");
+          const redTexts = [];
+          allTexts.forEach((text) => {
+            const color = getComputedStyle(text).color;
+            // compare color in rgb format
+            const targetColorRgb = hexToRgb(targetColor);
+            const colorRgb = parseRgb(color);
+            if (
+              colorRgb.r === targetColorRgb.r &&
+              colorRgb.g === targetColorRgb.g &&
+              colorRgb.b === targetColorRgb.b
+            ) {
+              redTexts.push(text.textContent);
+            }
+          });
+
+          output.value = redTexts.join("\n");
+        } catch (error) {
+          alert(error.message);
+        }
       });
     </script>
   </body>
