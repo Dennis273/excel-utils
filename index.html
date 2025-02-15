@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Get Red Texts from Excel sheet</h1>
+
+    <div>Steps:</div>
+    <ol>
+      <li>Select all and copy the Excel sheet</li>
+      <li>Click the button below</li>
+      <li>Get red texts in the textarea below</li>
+    </ol>
+    <div>
+      <button type="button" id="copy-button">I've copied the sheet.</button>
+    </div>
+    <div id="html-insert" style="height: 0px; overflow: hidden"></div>
+
+    <div>Result:</div>
+    <textarea id="output" readonly style="height: 200px; color: red"></textarea>
+
+    <script>
+      const output = document.getElementById("output");
+      output.value = "Hello World";
+
+      const inputTextarea = document.getElementById("input");
+      const htmlInsert = document.getElementById("html-insert");
+
+      const copyButton = document.getElementById("copy-button");
+      copyButton.addEventListener("click", async () => {
+        const clipboardItems = await navigator.clipboard.read();
+        console.log(clipboardItems);
+        const textHtmlInClipboard = clipboardItems.find((item) => {
+          return item.types.includes("text/html");
+        });
+
+        if (!textHtmlInClipboard) {
+          alert("No HTML in clipboard");
+          return;
+        }
+
+        const textHtmlBlob = await textHtmlInClipboard.getType("text/html");
+        const textHtml = await textHtmlBlob.text();
+
+        htmlInsert.innerHTML = textHtml;
+
+        // find all red texts in the html, use getComputedStyle to get the color
+        const allTexts = htmlInsert.querySelectorAll("*");
+        const redTexts = [];
+        allTexts.forEach((text) => {
+          const color = getComputedStyle(text).color;
+          if (color === "rgb(255, 0, 0)") {
+            redTexts.push(text.textContent);
+          }
+        });
+
+        output.value = redTexts.join("\n");
+      });
+    </script>
+  </body>
+</html>
