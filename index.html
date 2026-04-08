@@ -20,7 +20,7 @@
       <li>Select the color you want to find</li>
       <li>Select all and copy the Excel sheet</li>
       <li>Click the button below</li>
-      <li>Get red texts in the textarea below</li>
+      <li>Get colored texts in the textarea below</li>
     </ol>
     <div>
       <button type="button" id="copy-button">I've copied the sheet.</button>
@@ -34,7 +34,7 @@
     <div>Result:</div>
     <textarea id="output" readonly style="height: 200px"></textarea>
 
-    <details style="margin-top: 10px">
+    <details id="debug-details" style="margin-top: 10px">
       <summary style="cursor: pointer; color: #666">Debug Info</summary>
       <pre id="debug" style="background:#f4f4f4; padding:8px; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:300px; overflow:auto">(not run yet)</pre>
     </details>
@@ -65,19 +65,27 @@
 
       const output = document.getElementById("output");
       const debugEl = document.getElementById("debug");
+      const debugDetails = document.getElementById("debug-details");
       const htmlInsert = document.getElementById("html-insert");
       const copyButton = document.getElementById("copy-button");
+      const targetColorInput = document.getElementById("target-color");
 
+      const logLines = [];
       const log = (...args) => {
-        console.log(...args);
-        debugEl.textContent += args.join(" ") + "\n";
+        const line = args.join(" ");
+        console.log(line);
+        logLines.push(line);
+      };
+      const flushLog = () => {
+        debugEl.textContent = logLines.join("\n");
       };
 
       copyButton.addEventListener("click", async () => {
+        logLines.length = 0;
         debugEl.textContent = "";
         output.value = "";
         try {
-          const targetColor = document.getElementById("target-color").value;
+          const targetColor = targetColorInput.value;
           log("[1] Target color:", targetColor);
 
           const clipboardItems = await navigator.clipboard.read();
@@ -86,12 +94,13 @@
             log(`    item[${i}] types:`, item.types.join(", "));
           });
 
-          const textHtmlInClipboard = clipboardItems.find((item) => {
-            return item.types.includes("text/html");
-          });
+          const textHtmlInClipboard = clipboardItems.find((item) =>
+            item.types.includes("text/html")
+          );
 
           if (!textHtmlInClipboard) {
             log("[!] No text/html found in clipboard");
+            flushLog();
             alert("No HTML in clipboard");
             return;
           }
@@ -101,23 +110,29 @@
           log("[3] HTML length:", textHtml.length, "chars");
 
           // Write into iframe so <style> blocks in the Excel HTML are properly applied.
-          // Using innerHTML on a div strips the <html>/<head> structure, losing class-based styles.
+          // Using innerHTML on a div strips the <html>/<head> structure, losing class-based styles
+          // (Windows Excel uses class-based styles; Mac Excel uses inline styles).
           const iframeDoc = htmlInsert.contentDocument;
+          if (!iframeDoc) {
+            throw new Error("iframe contentDocument not available");
+          }
           iframeDoc.open();
           iframeDoc.write(textHtml);
           iframeDoc.close();
 
-          const allElements = iframeDoc.querySelectorAll("*");
-          log("[4] Total elements in HTML:", allElements.length);
+          // Only inspect leaf elements that carry visible text — skips <head>, <style>,
+          // <script>, <col>, etc. and avoids duplicate text from ancestor elements.
+          const leafElements = Array.from(iframeDoc.querySelectorAll("*")).filter(
+            (el) => el.children.length === 0 && el.textContent.trim() !== ""
+          );
+          log("[4] Leaf text elements:", leafElements.length);
 
           const targetColorRgb = hexToRgb(targetColor);
           log("[5] Target RGB:", JSON.stringify(targetColorRgb));
 
-          const redTexts = [];
-          const colorCounts = {};
-          allElements.forEach((el) => {
+          const matchedTexts = [];
+          leafElements.forEach((el) => {
             const color = htmlInsert.contentWindow.getComputedStyle(el).color;
-            colorCounts[color] = (colorCounts[color] || 0) + 1;
             let colorRgb;
             try {
               colorRgb = parseRgb(color);
@@ -129,22 +144,30 @@
               colorRgb.g === targetColorRgb.g &&
               colorRgb.b === targetColorRgb.b
             ) {
-              redTexts.push(el.textContent);
+              matchedTexts.push(el.textContent);
             }
           });
 
-          log("[6] Unique colors found:");
-          Object.entries(colorCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .forEach(([c, n]) => log(`    ${c} × ${n}`));
+          if (debugDetails.open) {
+            const colorCounts = {};
+            leafElements.forEach((el) => {
+              const color = htmlInsert.contentWindow.getComputedStyle(el).color;
+              colorCounts[color] = (colorCounts[color] || 0) + 1;
+            });
+            log("[6] Unique colors found:");
+            Object.entries(colorCounts)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 10)
+              .forEach(([c, n]) => log(`    ${c} × ${n}`));
+          }
 
-          log("[7] Matched elements:", redTexts.length);
-          output.value = redTexts.join("\n");
+          log("[7] Matched elements:", matchedTexts.length);
+          output.value = matchedTexts.join("\n");
         } catch (error) {
           log("[ERROR]", error.message);
           alert(error.message);
         }
+        flushLog();
       });
     </script>
   </body>
