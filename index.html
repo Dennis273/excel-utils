@@ -25,7 +25,7 @@
     <div>
       <button type="button" id="copy-button">I've copied the sheet.</button>
     </div>
-    <div id="html-insert" style="height: 0px; overflow: hidden"></div>
+    <iframe id="html-insert" style="position:absolute;left:-9999px;width:1px;height:1px" sandbox="allow-same-origin"></iframe>
     <div id="target-color-input">
       <label for="target-color">Target Color:</label>
       <input type="color" id="target-color" value="#ff0000" />
@@ -100,9 +100,14 @@
           const textHtml = await textHtmlBlob.text();
           log("[3] HTML length:", textHtml.length, "chars");
 
-          htmlInsert.innerHTML = textHtml;
+          // Write into iframe so <style> blocks in the Excel HTML are properly applied.
+          // Using innerHTML on a div strips the <html>/<head> structure, losing class-based styles.
+          const iframeDoc = htmlInsert.contentDocument;
+          iframeDoc.open();
+          iframeDoc.write(textHtml);
+          iframeDoc.close();
 
-          const allElements = htmlInsert.querySelectorAll("*");
+          const allElements = iframeDoc.querySelectorAll("*");
           log("[4] Total elements in HTML:", allElements.length);
 
           const targetColorRgb = hexToRgb(targetColor);
@@ -111,7 +116,7 @@
           const redTexts = [];
           const colorCounts = {};
           allElements.forEach((el) => {
-            const color = getComputedStyle(el).color;
+            const color = htmlInsert.contentWindow.getComputedStyle(el).color;
             colorCounts[color] = (colorCounts[color] || 0) + 1;
             let colorRgb;
             try {
