@@ -37,6 +37,7 @@
     <details id="debug-details" style="margin-top: 10px">
       <summary style="cursor: pointer; color: #666">Debug Info</summary>
       <pre id="debug" style="background:#f4f4f4; padding:8px; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:300px; overflow:auto">(not run yet)</pre>
+      <button type="button" id="export-debug" disabled>Export Debug File</button>
     </details>
 
     <script>
@@ -69,8 +70,10 @@
       const htmlInsert = document.getElementById("html-insert");
       const copyButton = document.getElementById("copy-button");
       const targetColorInput = document.getElementById("target-color");
+      const exportDebugBtn = document.getElementById("export-debug");
 
       const logLines = [];
+      let lastClipboardHtml = "";
       const log = (...args) => {
         const line = args.join(" ");
         console.log(line);
@@ -80,10 +83,27 @@
         debugEl.textContent = logLines.join("\n");
       };
 
+      exportDebugBtn.addEventListener("click", () => {
+        const content =
+          "=== DEBUG LOG ===\n" +
+          logLines.join("\n") +
+          "\n\n=== CLIPBOARD HTML ===\n" +
+          lastClipboardHtml;
+        const blob = new Blob([content], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "debug-" + new Date().toISOString().slice(0, 19).replace(/:/g, "-") + ".txt";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
       copyButton.addEventListener("click", async () => {
         logLines.length = 0;
+        lastClipboardHtml = "";
         debugEl.textContent = "";
         output.value = "";
+        exportDebugBtn.disabled = true;
         try {
           const targetColor = targetColorInput.value;
           log("[1] Target color:", targetColor);
@@ -107,6 +127,7 @@
 
           const textHtmlBlob = await textHtmlInClipboard.getType("text/html");
           const textHtml = await textHtmlBlob.text();
+          lastClipboardHtml = textHtml;
           log("[3] HTML length:", textHtml.length, "chars");
 
           // Write into iframe so <style> blocks in the Excel HTML are properly applied.
@@ -168,6 +189,7 @@
           alert(error.message);
         }
         flushLog();
+        exportDebugBtn.disabled = false;
       });
     </script>
   </body>
