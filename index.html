@@ -34,6 +34,11 @@
     <div>Result:</div>
     <textarea id="output" readonly style="height: 200px"></textarea>
 
+    <details style="margin-top: 10px">
+      <summary style="cursor: pointer; color: #666">Debug Info</summary>
+      <pre id="debug" style="background:#f4f4f4; padding:8px; font-size:12px; white-space:pre-wrap; word-break:break-all; max-height:300px; overflow:auto">(not run yet)</pre>
+    </details>
+
     <script>
       const hexToRgb = (hex) => {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -47,7 +52,7 @@
       };
 
       const parseRgb = (rgb) => {
-        const result = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb);
+        const result = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb);
         if (!result) {
           throw new Error(`Invalid color: ${rgb}`);
         }
@@ -59,49 +64,80 @@
       };
 
       const output = document.getElementById("output");
-
-      const inputTextarea = document.getElementById("input");
+      const debugEl = document.getElementById("debug");
       const htmlInsert = document.getElementById("html-insert");
       const copyButton = document.getElementById("copy-button");
+
+      const log = (...args) => {
+        console.log(...args);
+        debugEl.textContent += args.join(" ") + "\n";
+      };
+
       copyButton.addEventListener("click", async () => {
+        debugEl.textContent = "";
+        output.value = "";
         try {
           const targetColor = document.getElementById("target-color").value;
+          log("[1] Target color:", targetColor);
 
           const clipboardItems = await navigator.clipboard.read();
-          console.log(clipboardItems);
+          log("[2] Clipboard items:", clipboardItems.length);
+          clipboardItems.forEach((item, i) => {
+            log(`    item[${i}] types:`, item.types.join(", "));
+          });
+
           const textHtmlInClipboard = clipboardItems.find((item) => {
             return item.types.includes("text/html");
           });
 
           if (!textHtmlInClipboard) {
+            log("[!] No text/html found in clipboard");
             alert("No HTML in clipboard");
             return;
           }
 
           const textHtmlBlob = await textHtmlInClipboard.getType("text/html");
           const textHtml = await textHtmlBlob.text();
+          log("[3] HTML length:", textHtml.length, "chars");
 
           htmlInsert.innerHTML = textHtml;
 
-          // find all red texts in the html, use getComputedStyle to get the color
-          const allTexts = htmlInsert.querySelectorAll("*");
+          const allElements = htmlInsert.querySelectorAll("*");
+          log("[4] Total elements in HTML:", allElements.length);
+
+          const targetColorRgb = hexToRgb(targetColor);
+          log("[5] Target RGB:", JSON.stringify(targetColorRgb));
+
           const redTexts = [];
-          allTexts.forEach((text) => {
-            const color = getComputedStyle(text).color;
-            // compare color in rgb format
-            const targetColorRgb = hexToRgb(targetColor);
-            const colorRgb = parseRgb(color);
+          const colorCounts = {};
+          allElements.forEach((el) => {
+            const color = getComputedStyle(el).color;
+            colorCounts[color] = (colorCounts[color] || 0) + 1;
+            let colorRgb;
+            try {
+              colorRgb = parseRgb(color);
+            } catch {
+              return;
+            }
             if (
               colorRgb.r === targetColorRgb.r &&
               colorRgb.g === targetColorRgb.g &&
               colorRgb.b === targetColorRgb.b
             ) {
-              redTexts.push(text.textContent);
+              redTexts.push(el.textContent);
             }
           });
 
+          log("[6] Unique colors found:");
+          Object.entries(colorCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .forEach(([c, n]) => log(`    ${c} × ${n}`));
+
+          log("[7] Matched elements:", redTexts.length);
           output.value = redTexts.join("\n");
         } catch (error) {
+          log("[ERROR]", error.message);
           alert(error.message);
         }
       });
